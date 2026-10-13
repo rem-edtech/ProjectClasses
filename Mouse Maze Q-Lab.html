@@ -1,0 +1,531 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mouse Maze Q-Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab bench. Maze on the left, the mouse's Q-table "notebook" on the right, classroom guide below. */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --ink:#1d2733; --muted:#5b6878; --line:#d3dae2;
+  --cell:#f7f9fb; --block:#3a4654; --fog:#e3e8ee;
+  --accent:#e9a90c; --on-accent:#231a02; --cheese-edge:#b07f00;
+  --pos:#1f9e78; --neg:#d2443a; --gave:#9aa6b4;
+  --mouse:#8a94a3; --ear:#f0a3b2; --wood:#b07a46; --steel:#59626e;
+  --f-display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#11161c; --panel:#19212a; --ink:#e6ecf2; --muted:#97a4b4; --line:#2e3946;
+  --cell:#1f2832; --block:#5d6b7c; --fog:#252f3a;
+  --accent:#f2b928; --on-accent:#231a02; --cheese-edge:#c99510;
+  --pos:#3cc29a; --neg:#ef6156; --gave:#6d7a8a;
+  --mouse:#a7b0bd; --ear:#e891a2; --wood:#a8723f; --steel:#8b95a2; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#11161c; --panel:#19212a; --ink:#e6ecf2; --muted:#97a4b4; --line:#2e3946;
+  --cell:#1f2832; --block:#5d6b7c; --fog:#252f3a;
+  --accent:#f2b928; --on-accent:#231a02; --cheese-edge:#c99510;
+  --pos:#3cc29a; --neg:#ef6156; --gave:#6d7a8a;
+  --mouse:#a7b0bd; --ear:#e891a2; --wood:#a8723f; --steel:#8b95a2; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 56px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:6px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0;text-wrap:balance}
+h1 span{background:linear-gradient(transparent 62%, color-mix(in oklab,var(--accent) 55%,transparent) 62%)}
+h2{font-family:var(--f-display);font-weight:600;font-size:19px;margin:0}
+.intro{max-width:66ch;color:var(--muted);margin:4px 0 0}
+
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{font:inherit;font-weight:700;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 16px;border-radius:999px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tab:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.layout{display:grid;grid-template-columns:1fr;gap:22px;align-items:start}
+@media (min-width:920px){.layout{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+
+.board{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;width:100%;max-width:500px;margin:0 auto;padding:8px;background:var(--line);border-radius:14px}
+.cell{position:relative;aspect-ratio:1;border-radius:7px;background:var(--cell);overflow:hidden}
+.cell svg.q{position:absolute;inset:0;width:100%;height:100%}
+.cell .lbl{position:absolute;left:4px;top:2px;font-family:var(--f-mono);font-size:10px;color:var(--muted);pointer-events:none;z-index:2}
+.cell .icon{position:absolute;left:50%;top:50%;width:46%;height:46%;transform:translate(-50%,-50%);z-index:3;pointer-events:none}
+.cell .icon svg{width:100%;height:100%;display:block}
+.cell.block{background:repeating-linear-gradient(45deg,var(--block) 0 6px,color-mix(in oklab,var(--block) 80%,var(--bg)) 6px 12px)}
+.cell.fog::after{content:"?";position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:clamp(14px,3vw,22px);color:var(--muted);background:color-mix(in oklab,var(--fog) 78%,transparent);z-index:1}
+.cell.here{box-shadow:inset 0 0 0 3px var(--ink)}
+.cell.term-c{background:color-mix(in oklab,var(--accent) 22%,var(--cell))}
+.cell.term-t{background:color-mix(in oklab,var(--neg) 18%,var(--cell))}
+.q text{font-family:var(--f-mono);font-size:12.5px;fill:var(--ink);text-anchor:middle;dominant-baseline:middle}
+.q text.z{fill:var(--muted);opacity:.55}
+.q .hot{stroke:var(--ink);stroke-width:3}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;font-size:13px;color:var(--muted)}
+.legend b{font-family:var(--f-mono);color:var(--ink);font-weight:600}
+.legend .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center}
+.dpad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,48px);gap:6px}
+.dpad .up{grid-column:2}
+.dpad .left{grid-column:1;grid-row:2}.dpad .down{grid-column:2;grid-row:2}.dpad .right{grid-column:3;grid-row:2}
+.btn{font:inherit;font-weight:700;font-size:15px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:9px 14px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.arrow{font-size:20px;padding:0}
+.btn:disabled{opacity:.5;cursor:default}
+.hint{font-size:13px;color:var(--muted);text-align:center;margin:0}
+
+.notebook{border-left:4px solid var(--accent)}
+#explain{margin:0;max-width:62ch}
+#explain strong{font-weight:700}
+.math{font-family:var(--f-mono);font-size:13px;background:var(--bg);border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:nowrap;margin:0}
+.tag{display:inline-block;font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--bg);color:var(--muted);margin-right:6px;vertical-align:1px}
+.tag.explore{background:color-mix(in oklab,var(--accent) 30%,var(--bg));color:var(--ink)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:8px 10px;border-radius:10px;background:var(--bg)}
+.stat .v{font-family:var(--f-mono);font-weight:600;font-size:20px;font-variant-numeric:tabular-nums}
+.stat .k{font-size:12px;color:var(--muted)}
+
+.slider{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
+.slider label{font-weight:700}
+.slider output{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.slider input{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.slider small{grid-column:1/-1;color:var(--muted);font-size:13px}
+.toggles{display:flex;flex-wrap:wrap;gap:8px 18px}
+.toggles label{display:flex;gap:6px;align-items:center;cursor:pointer;font-size:15px}
+.toggles input{accent-color:var(--accent);width:17px;height:17px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+
+.tablewrap{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+thead th{position:sticky;top:0;background:var(--panel);font-weight:600;z-index:1}
+tr.cur td:first-child{background:var(--ink);color:var(--bg);font-weight:600}
+td.best{font-weight:600;text-decoration:underline;text-underline-offset:3px}
+td.hot{outline:2px solid var(--ink);outline-offset:-2px}
+.sub{font-size:13px;color:var(--muted);margin:0}
+canvas{width:100%;height:120px;display:block}
+
+.guide{display:grid;grid-template-columns:1fr;gap:16px}
+@media (min-width:820px){.guide{grid-template-columns:1fr 1fr}}
+.guide ol,.guide dl{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;max-width:64ch}
+.guide dl{padding-left:0}
+.guide dt{font-weight:700}
+.guide dd{margin:0 0 4px;color:var(--muted)}
+@media (max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}.wrap{padding-inline:16px}}
+@media (prefers-reduced-motion:no-preference){.cell{transition:box-shadow .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Reinforcement learning, hands on</div>
+    <h1>Mouse Maze <span>Q-Lab</span></h1>
+    <p class="intro">A mouse is somewhere in a maze. Somewhere there is cheese, and somewhere there are traps. Nobody tells the mouse where. It only learns from what happens when it moves, and it writes what it learns into a Q-table: one number for every square and every direction.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabHuman" aria-selected="true">Round 1 · You are the mouse</button>
+    <button class="tab" role="tab" id="tabAgent" aria-selected="false">Round 2 · The mouse learns alone</button>
+  </div>
+
+  <div class="layout">
+    <div class="col">
+      <div class="panel">
+        <div class="board" id="board" role="img" aria-label="Maze grid"></div>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--accent)"></span>Cheese <b>+10</b></span>
+          <span><span class="sw" style="background:var(--neg)"></span>Trap <b>−10</b></span>
+          <span>Bump a wall <b>−1</b></span>
+          <span>Ordinary step <b>0</b></span>
+        </div>
+        <div id="humanControls" class="controls">
+          <div class="dpad">
+            <button class="btn arrow up" data-a="0" aria-label="Up">↑</button>
+            <button class="btn arrow left" data-a="3" aria-label="Left">←</button>
+            <button class="btn arrow down" data-a="2" aria-label="Down">↓</button>
+            <button class="btn arrow right" data-a="1" aria-label="Right">→</button>
+          </div>
+        </div>
+        <p class="hint" id="humanHint">Arrow keys or WASD also work.</p>
+        <div id="agentControls" class="controls" hidden>
+          <button class="btn" id="btnStep">Take one step</button>
+          <button class="btn primary" id="btnRun">Watch one try</button>
+          <button class="btn" id="btnTrain100">Practice 100 tries</button>
+          <button class="btn" id="btnTrain1000">Practice 1,000</button>
+          <label class="sub" for="speed">Speed
+            <select id="speed" class="btn" style="padding:6px 8px;font-weight:400">
+              <option value="420">Slow</option><option value="180" selected>Normal</option><option value="50">Fast</option>
+            </select></label>
+        </div>
+      </div>
+
+      <div class="panel notebook" aria-live="polite">
+        <h2>What the mouse just learned</h2>
+        <p id="explain"></p>
+        <p class="math" id="math" hidden></p>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="panel">
+        <div class="stats">
+          <div class="stat"><span class="v" id="stTries">0</span><span class="k">Tries</span></div>
+          <div class="stat"><span class="v" id="stCheese">0</span><span class="k">Cheese found</span></div>
+          <div class="stat"><span class="v" id="stTrap">0</span><span class="k">Traps hit</span></div>
+          <div class="stat"><span class="v" id="stSteps">0</span><span class="k">Steps this try</span></div>
+        </div>
+        <div>
+          <p class="sub" style="margin-bottom:6px">Steps per try, most recent on the right. <span style="color:var(--pos)">■</span> cheese <span style="color:var(--neg)">■</span> trap <span style="color:var(--gave)">■</span> gave up</p>
+          <canvas id="chart" height="120"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>The Q-table</h2>
+        <p class="sub">Each row is a square (a <em>state</em>). Each column is a move (an <em>action</em>). The number is the mouse's current guess of how good that move is from that square. Underlined = best known move. The highlighted row is where the mouse is now.</p>
+        <div class="tablewrap"><table id="qtable"></table></div>
+      </div>
+
+      <div class="panel">
+        <h2>The mouse's personality</h2>
+        <div class="slider">
+          <label for="alpha">Learning speed</label><output id="alphaOut"></output>
+          <input type="range" id="alpha" min="0" max="1" step="0.05" value="0.5">
+          <small>How far one experience moves a number in the table. 0 = never learns, 1 = believes only the latest experience.</small>
+        </div>
+        <div class="slider">
+          <label for="gamma">Patience</label><output id="gammaOut"></output>
+          <input type="range" id="gamma" min="0" max="0.99" step="0.01" value="0.9">
+          <small>How much future rewards count. At 0 the mouse only cares about what happens on the very next step.</small>
+        </div>
+        <div class="slider">
+          <label for="eps">Curiosity</label><output id="epsOut"></output>
+          <input type="range" id="eps" min="0" max="1" step="0.05" value="0.2">
+          <small>How often the mouse tries a random move instead of its best known one. Only used in Round 2.</small>
+        </div>
+        <div class="toggles">
+          <label><input type="checkbox" id="hide" checked> Hide the map</label>
+          <label><input type="checkbox" id="nums" checked> Numbers on the maze</label>
+          <label><input type="checkbox" id="best"> Show best moves</label>
+          <label><input type="checkbox" id="showMath"> Show the math</label>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnNew">New random maze</button>
+          <button class="btn" id="btnClassic">Starter maze</button>
+          <button class="btn" id="btnForget">Forget everything</button>
+        </div>
+        <p class="sub" id="confirmForget" hidden>Erase the whole Q-table and the try history? <button class="btn" id="yesForget">Erase</button> <button class="btn" id="noForget">Keep</button></p>
+      </div>
+    </div>
+  </div>
+
+  <section class="guide">
+    <div class="panel">
+      <h2>Running it in class</h2>
+      <ol>
+        <li><strong>Round 1, map hidden.</strong> A volunteer drives the mouse while the class watches the table. Nobody knows where the cheese is. Stop after the first trap and ask: which number changed, and why only that one?</li>
+        <li><strong>Find the cheese a few times.</strong> Ask students to look at the squares next to the cheese, then two squares away. The good news spreads backward one step per try. That is Patience at work.</li>
+        <li><strong>Round 2.</strong> Click <em>Watch one try</em> a few times, then <em>Practice 100 tries</em>. Turn on <em>Show best moves</em>: the arrows are the mouse's strategy.</li>
+        <li><strong>Predict, then test.</strong> Before moving a slider, have students write down what they expect to happen.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h2>Prediction questions</h2>
+      <ol>
+        <li>Set Curiosity to 0 and click <em>Forget everything</em>. Practice 100 tries. Why can the mouse get stuck doing something mediocre?</li>
+        <li>Set Patience to 0. Can the mouse still learn a route from the start? What does it learn?</li>
+        <li>Train a mouse well, then click <em>New random maze</em> without forgetting. Is the old Q-table useful, harmful, or neither?</li>
+        <li>Set Learning speed to 1, then to 0.05. Which mouse learns faster? Which is steadier?</li>
+        <li>In the starter maze, the short way to the cheese runs past traps. Does the trained mouse take the risky route or the safe one? What changes that?</li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const N=5, ROWS="ABCDE", ARW=["↑","→","↓","←"], NAMES=["up","right","down","left"];
+const DR=[-1,0,1,0], DC=[0,1,0,-1];
+const STARTER=["....C","..B.T","...T.",".B...","S...."];
+const MAXSTEPS=200;
+
+const ICON={
+ mouse:'<svg viewBox="0 0 64 64"><path d="M15 44 C3 48,4 60,16 58" fill="none" stroke="var(--mouse)" stroke-width="3" stroke-linecap="round"/><ellipse cx="33" cy="40" rx="19" ry="13" fill="var(--mouse)"/><circle cx="40" cy="25" r="8" fill="var(--mouse)"/><circle cx="40" cy="25" r="4.5" fill="var(--ear)"/><circle cx="45" cy="36" r="2.4" fill="var(--ink)"/><circle cx="52" cy="42" r="2.6" fill="var(--ear)"/></svg>',
+ cheese:'<svg viewBox="0 0 64 64"><path d="M6 50 L58 22 L58 50 Z" fill="var(--accent)" stroke="var(--cheese-edge)" stroke-width="2.5" stroke-linejoin="round"/><circle cx="44" cy="40" r="4" fill="var(--cheese-edge)"/><circle cx="30" cy="45" r="2.6" fill="var(--cheese-edge)"/><circle cx="52" cy="31" r="2.2" fill="var(--cheese-edge)"/></svg>',
+ trap:'<svg viewBox="0 0 64 64"><rect x="6" y="36" width="52" height="16" rx="3" fill="var(--wood)"/><path d="M12 36 Q32 6 52 36" fill="none" stroke="var(--steel)" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="36" r="4" fill="var(--neg)"/></svg>'
+};
+
+const st={grid:[],start:0,Q:[],pos:0,mode:"human",alpha:.5,gamma:.9,eps:.2,
+  hide:true,nums:true,best:false,math:false,visited:new Set(),steps:0,hist:[],last:null,timer:null,speed:180};
+
+const $=id=>document.getElementById(id);
+const nm=i=>ROWS[Math.floor(i/N)]+(i%N+1);
+const f1=v=>(Math.abs(v)<0.05?0:v).toFixed(1);
+const f2=v=>v.toFixed(2);
+
+function freshQ(){st.Q=Array.from({length:N*N},()=>[0,0,0,0]);}
+function loadGrid(rows,keepQ){
+  const g=rows.join("").split("");
+  st.start=g.indexOf("S"); g[st.start]=".";
+  st.grid=g; if(!keepQ){freshQ(); st.hist=[];}
+  st.pos=st.start; st.steps=0; st.last=null;
+  st.visited=new Set([st.start]);
+}
+function isState(i){return st.grid[i]==="."}
+
+function move(s,a){
+  const r=Math.floor(s/N)+DR[a], c=s%N+DC[a];
+  if(r<0||r>=N||c<0||c>=N||st.grid[r*N+c]==="B") return {s2:s,r:-1,kind:"bump",done:false};
+  const n=r*N+c, t=st.grid[n];
+  if(t==="C") return {s2:n,r:10,kind:"cheese",done:true};
+  if(t==="T") return {s2:n,r:-10,kind:"trap",done:true};
+  return {s2:n,r:0,kind:"step",done:false};
+}
+function learn(s,a,res){
+  const old=st.Q[s][a];
+  const best=res.done?0:Math.max(...st.Q[res.s2]);
+  const target=res.r+st.gamma*best;
+  const nv=old+st.alpha*(target-old);
+  st.Q[s][a]=nv;
+  return {old,best,target,nv};
+}
+function greedy(s){
+  const q=st.Q[s], m=Math.max(...q), ties=[];
+  q.forEach((v,i)=>{if(Math.abs(v-m)<1e-9)ties.push(i)});
+  return ties[Math.floor(Math.random()*ties.length)];
+}
+function choose(s){
+  if(Math.random()<st.eps) return {a:Math.floor(Math.random()*4),how:"explore"};
+  return {a:greedy(s),how:"exploit"};
+}
+function record(outcome,steps){
+  st.hist.push({o:outcome,n:steps});
+  if(st.hist.length>2000) st.hist.splice(0,st.hist.length-2000);
+}
+function doStep(a,how){
+  const s=st.pos, res=move(s,a), u=learn(s,a,res);
+  st.visited.add(res.s2); st.steps++;
+  st.last={s,a,res,u,how,steps:st.steps,gaveUp:false};
+  if(res.done){record(res.kind,st.steps); st.pos=st.start; st.steps=0;}
+  else if(how!=="human" && st.steps>=MAXSTEPS){record("gave",st.steps); st.last.gaveUp=true; st.pos=st.start; st.steps=0;}
+  else st.pos=res.s2;
+  return res;
+}
+function train(k){
+  stopRun();
+  let c=0,t=0,g=0;
+  for(let e=0;e<k;e++){
+    let p=st.start,n=0,out="gave";
+    while(n<MAXSTEPS){
+      const {a}=choose(p), res=move(p,a); learn(p,a,res); st.visited.add(res.s2); n++;
+      if(res.done){out=res.kind;break}
+      p=res.s2;
+    }
+    record(out,n); if(out==="cheese")c++; else if(out==="trap")t++; else g++;
+  }
+  st.pos=st.start; st.steps=0; st.last=null;
+  const recent=st.hist.slice(-Math.min(k,20)).filter(h=>h.o==="cheese").map(h=>h.n);
+  const avg=recent.length?(recent.reduce((x,y)=>x+y,0)/recent.length).toFixed(1):"–";
+  $("explain").innerHTML=`<strong>Practiced ${k.toLocaleString()} tries:</strong> ${c} found the cheese, ${t} hit a trap, ${g} gave up after ${MAXSTEPS} steps. In the last few successful tries the mouse needed about <strong>${avg}</strong> steps. Turn on <em>Show best moves</em> to see the strategy it has learned.`;
+  $("math").hidden=true;
+  render();
+}
+
+function explain(){
+  const L=st.last;
+  if(!L){
+    $("explain").innerHTML= st.mode==="human"
+      ? "Move the mouse with the arrows. You can't see the cheese or the traps yet. After every move, exactly one number in the Q-table changes. Watch which one."
+      : "Click <em>Watch one try</em> to see the mouse explore by itself, or <em>Practice 100 tries</em> to let it learn quickly. It uses the same Q-table you built in Round 1.";
+    $("math").hidden=true; return;
+  }
+  const {s,a,res,u,how}=L, from=nm(s), to=nm(res.s2), dir=NAMES[a];
+  const tag= how==="explore"?'<span class="tag explore">Curious move</span>'
+           : how==="exploit"?'<span class="tag">Best known move</span>':'';
+  let what;
+  if(res.kind==="bump") what=`Tried to go <strong>${dir}</strong> from ${from} and bumped into a wall. Reward <strong>−1</strong>.`;
+  else if(res.kind==="cheese") what=`Went <strong>${dir}</strong> from ${from} and found the <strong>cheese</strong>! Reward <strong>+10</strong>. The try is over and the mouse goes back to the start.`;
+  else if(res.kind==="trap") what=`Went <strong>${dir}</strong> from ${from} into a <strong>trap</strong>. Reward <strong>−10</strong>. The try is over and the mouse goes back to the start.`;
+  else what=`Moved <strong>${dir}</strong> from ${from} to ${to}. Reward <strong>0</strong>.`;
+  const look = res.done
+    ? `Nothing comes after the end of a try, so the target is just the reward: <strong>${f1(u.target)}</strong>.`
+    : `Looking ahead, the best the mouse expects from ${to} is ${f1(u.best)}; Patience (${st.gamma.toFixed(2)}) shrinks that to ${f1(st.gamma*u.best)}, so the target is <strong>${f1(u.target)}</strong>.`;
+  const pct=Math.round(st.alpha*100);
+  const upd=`The table said "${dir} from ${from}" was worth ${f1(u.old)}. With Learning speed ${st.alpha.toFixed(2)} it moves ${pct}% of the way toward the target: now <strong>${f1(u.nv)}</strong>.`;
+  const giveUp=L.gaveUp?` After ${MAXSTEPS} steps without an ending, the mouse gave up and went back to the start.`:"";
+  $("explain").innerHTML=`${tag}${what} ${look} ${upd}${giveUp}`;
+  const arrow=ARW[a];
+  $("math").textContent= res.done
+    ? `Q(${from},${arrow}) ← ${f2(u.old)} + ${st.alpha.toFixed(2)} × [ ${res.r} − ${f2(u.old)} ] = ${f2(u.nv)}`
+    : `Q(${from},${arrow}) ← ${f2(u.old)} + ${st.alpha.toFixed(2)} × [ ${res.r} + ${st.gamma.toFixed(2)} × ${f2(u.best)} − ${f2(u.old)} ] = ${f2(u.nv)}`;
+  $("math").hidden=!st.math;
+}
+
+function fillFor(v){
+  const p=Math.min(1,Math.abs(v)/10), pct=Math.round(8+p*72);
+  if(Math.abs(v)<0.005) return "var(--cell)";
+  return `color-mix(in oklab, var(${v>0?"--pos":"--neg"}) ${pct}%, var(--cell))`;
+}
+const TRI=["0,0 100,0 50,50","100,0 100,100 50,50","0,100 100,100 50,50","0,0 0,100 50,50"];
+const TXT=[[50,17],[83,51],[50,85],[17,51]];
+const ARROWPATH=["M50 50 L50 22 M42 30 L50 22 L58 30","M50 50 L78 50 M70 42 L78 50 L70 58","M50 50 L50 78 M42 70 L50 78 L58 70","M50 50 L22 50 M30 42 L22 50 L30 58"];
+
+function renderBoard(){
+  const L=st.last; let h="";
+  for(let i=0;i<N*N;i++){
+    const t=st.grid[i], seen=st.visited.has(i);
+    const cls=["cell"];
+    if(t==="B"){h+=`<div class="cell block"><span class="lbl" style="color:var(--bg)">${nm(i)}</span></div>`;continue}
+    const hidden = st.hide && !seen;
+    if(hidden) cls.push("fog");
+    if(!hidden && t==="C") cls.push("term-c");
+    if(!hidden && t==="T") cls.push("term-t");
+    if(i===st.pos) cls.push("here");
+    let svg="";
+    if(t==="."){
+      svg='<svg class="q" viewBox="0 0 100 100" aria-hidden="true">';
+      for(let a=0;a<4;a++){
+        const hot = L && L.s===i && L.a===a ? ' class="hot"' : "";
+        svg+=`<polygon points="${TRI[a]}" fill="${fillFor(st.Q[i][a])}"${hot}/>`;
+      }
+      svg+='<path d="M0 0 L100 100 M100 0 L0 100" stroke="var(--line)" stroke-width="1"/>';
+      if(st.nums) for(let a=0;a<4;a++){const v=st.Q[i][a];svg+=`<text x="${TXT[a][0]}" y="${TXT[a][1]}"${Math.abs(v)<0.05?' class="z"':""}>${f1(v)}</text>`}
+      if(st.best && i!==st.pos){const q=st.Q[i]; if(q.some(v=>Math.abs(v)>0.005)){const a=q.indexOf(Math.max(...q)); svg+=`<path d="${ARROWPATH[a]}" stroke="var(--ink)" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`}}
+      svg+="</svg>";
+    }
+    let icon="";
+    if(i===st.pos) icon=ICON.mouse;
+    else if(!hidden && t==="C") icon=ICON.cheese;
+    else if(!hidden && t==="T") icon=ICON.trap;
+    h+=`<div class="${cls.join(" ")}">${svg}<span class="lbl">${nm(i)}</span>${icon?`<div class="icon">${icon}</div>`:""}</div>`;
+  }
+  $("board").innerHTML=h;
+}
+
+function renderTable(){
+  const L=st.last;
+  let h="<thead><tr><th>Square</th>"+ARW.map((a,i)=>`<th title="${NAMES[i]}">${a}</th>`).join("")+"</tr></thead><tbody>";
+  for(let i=0;i<N*N;i++){
+    if(!isState(i)) continue;
+    const q=st.Q[i], m=Math.max(...q), any=q.some(v=>Math.abs(v)>0.005);
+    h+=`<tr${i===st.pos?' class="cur"':""}><td>${nm(i)}</td>`;
+    for(let a=0;a<4;a++){
+      const c=[]; if(any && Math.abs(q[a]-m)<1e-9) c.push("best"); if(L&&L.s===i&&L.a===a) c.push("hot");
+      h+=`<td class="${c.join(" ")}" style="background:${fillFor(q[a])}">${f2(q[a])}</td>`;
+    }
+    h+="</tr>";
+  }
+  $("qtable").innerHTML=h+"</tbody>";
+  const cur=$("qtable").querySelector("tr.cur");
+  if(cur){const w=cur.closest(".tablewrap"),top=cur.offsetTop-w.clientHeight/2; if(cur.offsetTop<w.scrollTop+30||cur.offsetTop>w.scrollTop+w.clientHeight-30) w.scrollTop=Math.max(0,top);}
+}
+
+function renderStats(){
+  $("stTries").textContent=st.hist.length.toLocaleString();
+  $("stCheese").textContent=st.hist.filter(h=>h.o==="cheese").length.toLocaleString();
+  $("stTrap").textContent=st.hist.filter(h=>h.o==="trap").length.toLocaleString();
+  $("stSteps").textContent=st.steps;
+}
+
+function renderChart(){
+  const cv=$("chart"), dpr=window.devicePixelRatio||1, W=cv.clientWidth||300, H=120;
+  cv.width=W*dpr; cv.height=H*dpr;
+  const ctx=cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.documentElement), col=k=>cs.getPropertyValue(k).trim();
+  ctx.font="11px "+col("--f-mono");
+  const data=st.hist.slice(-120);
+  if(!data.length){ctx.fillStyle=col("--muted");ctx.fillText("No tries yet.",8,H/2);return}
+  const max=Math.max(10,...data.map(d=>d.n)), left=30, bot=H-14, top=8, bw=(W-left)/120;
+  ctx.strokeStyle=col("--line"); ctx.fillStyle=col("--muted"); ctx.lineWidth=1;
+  [0,max].forEach(v=>{const y=bot-(v/max)*(bot-top); ctx.beginPath();ctx.moveTo(left,y+.5);ctx.lineTo(W,y+.5);ctx.stroke(); ctx.fillText(String(v),2,y+4)});
+  const start=W-data.length*bw;
+  data.forEach((d,i)=>{
+    const hgt=Math.max(2,(d.n/max)*(bot-top));
+    ctx.fillStyle=col(d.o==="cheese"?"--pos":d.o==="trap"?"--neg":"--gave");
+    ctx.fillRect(start+i*bw+0.5,bot-hgt,Math.max(1,bw-1),hgt);
+  });
+  ctx.fillStyle=col("--muted"); ctx.fillText("steps",2,H-2);
+}
+
+function render(){renderBoard();renderTable();renderStats();renderChart();}
+function stepAndShow(a,how){doStep(a,how);explain();render();}
+
+function stopRun(){ if(st.timer){clearInterval(st.timer);st.timer=null;} $("btnRun").textContent="Watch one try"; }
+function runOne(){
+  if(st.timer){stopRun();return}
+  $("btnRun").textContent="Stop";
+  st.timer=setInterval(()=>{
+    const {a,how}=choose(st.pos), res=doStep(a,how); explain(); render();
+    if(res.done||st.last.gaveUp) stopRun();
+  },st.speed);
+}
+
+function setMode(m){
+  stopRun(); st.mode=m;
+  $("tabHuman").setAttribute("aria-selected",m==="human"); $("tabAgent").setAttribute("aria-selected",m==="agent");
+  $("humanControls").hidden=$("humanHint").hidden=m!=="human"; $("agentControls").hidden=m!=="agent";
+  if(st.steps===0) st.last=null;
+  explain(); render();
+}
+
+function randomMaze(){
+  for(let tries=0;tries<500;tries++){
+    const g=Array(N*N).fill("."), cells=[...Array(N*N).keys()].sort(()=>Math.random()-.5);
+    const s=cells[0], c=cells.find(i=>Math.abs(Math.floor(i/N)-Math.floor(s/N))+Math.abs(i%N-s%N)>=5);
+    if(c===undefined) continue;
+    g[s]="S"; g[c]="C";
+    const rest=cells.filter(i=>i!==s&&i!==c);
+    g[rest[0]]="T"; g[rest[1]]="T"; g[rest[2]]="B"; g[rest[3]]="B";
+    // path must exist avoiding traps and blocks
+    const seen=new Set([s]), q=[s]; let ok=false;
+    while(q.length){const p=q.shift(); if(p===c){ok=true;break}
+      for(let a=0;a<4;a++){const r=Math.floor(p/N)+DR[a],cc=p%N+DC[a]; if(r<0||r>=N||cc<0||cc>=N) continue; const n=r*N+cc;
+        if(!seen.has(n)&&(g[n]==="."||g[n]==="C")){seen.add(n);q.push(n)}}}
+    if(ok){const rows=[];for(let r=0;r<N;r++)rows.push(g.slice(r*N,r*N+N).join(""));return rows}
+  }
+  return STARTER;
+}
+
+// Wire up
+document.querySelectorAll(".dpad .btn").forEach(b=>b.addEventListener("click",()=>stepAndShow(+b.dataset.a,"human")));
+document.addEventListener("keydown",e=>{
+  if(st.mode!=="human") return;
+  const tag=e.target.tagName; if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+  const map={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,w:0,d:1,s:2,a:3,W:0,D:1,S:2,A:3};
+  if(e.key in map){e.preventDefault();stepAndShow(map[e.key],"human")}
+});
+$("tabHuman").onclick=()=>setMode("human"); $("tabAgent").onclick=()=>setMode("agent");
+$("btnStep").onclick=()=>{stopRun();const {a,how}=choose(st.pos);stepAndShow(a,how)};
+$("btnRun").onclick=runOne;
+$("btnTrain100").onclick=()=>train(100); $("btnTrain1000").onclick=()=>train(1000);
+$("speed").onchange=e=>{st.speed=+e.target.value; if(st.timer){stopRun();runOne()}};
+function bindSlider(id,key){const el=$(id),out=$(id+"Out");const up=()=>{st[key]=+el.value;out.textContent=(+el.value).toFixed(2)};el.addEventListener("input",up);up()}
+bindSlider("alpha","alpha"); bindSlider("gamma","gamma"); bindSlider("eps","eps");
+$("hide").onchange=e=>{st.hide=e.target.checked;render()};
+$("nums").onchange=e=>{st.nums=e.target.checked;render()};
+$("best").onchange=e=>{st.best=e.target.checked;render()};
+$("showMath").onchange=e=>{st.math=e.target.checked;$("math").hidden=!st.math||!st.last};
+$("btnNew").onclick=()=>{stopRun();loadGrid(randomMaze(),true);explain();render();
+  $("explain").innerHTML="New maze. The cheese and traps have moved, but the mouse still has its old Q-table. Click <em>Forget everything</em> for a truly fresh mouse."};
+$("btnClassic").onclick=()=>{stopRun();loadGrid(STARTER,false);explain();render()};
+$("btnForget").onclick=()=>{$("confirmForget").hidden=false};
+$("noForget").onclick=()=>{$("confirmForget").hidden=true};
+$("yesForget").onclick=()=>{stopRun();freshQ();st.hist=[];st.pos=st.start;st.steps=0;st.last=null;st.visited=new Set([st.start]);$("confirmForget").hidden=true;explain();render()};
+window.addEventListener("resize",renderChart);
+
+function start(saved){
+  if(saved && saved.grid){
+    st.grid=saved.grid; st.start=saved.start; st.Q=saved.Q; st.hist=saved.hist||[];
+    st.pos=st.start; st.steps=0; st.visited=new Set(saved.visited||[st.start]);
+  } else loadGrid(STARTER,false);
+  explain(); render();
+}
+window.claude?.hot?.snapshot?.(()=>({grid:st.grid,start:st.start,Q:st.Q,hist:st.hist,visited:[...st.visited]}));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body></html>
