@@ -1,0 +1,329 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Kindergartner vs. AlphaGo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+/* Layout: a Go board split in two. White-stone side = easy for people, black-stone side = easy for AI. Task cards wait in a tray above. */
+:root {
+  --bg: #f3efe6;
+  --board: #ddb46a;        /* kaya wood */
+  --board-line: #8a6a2f;
+  --card: #fffdf8;
+  --ink: #1d1a15;
+  --muted: #6b6253;
+  --line: #d9cfbd;
+  --accent: #b23a2a;       /* hanko red */
+  --good: #2c7a4b;
+  --bad: #b23a2a;
+  --select: #2f5fb3;
+  --display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17150f; --board: #5c4824; --board-line: #a7884a; --card: #24211a; --ink: #f0eadc;
+    --muted: #b3a88f; --line: #3d372a; --accent: #ff7a63; --good: #63c98b; --bad: #ff7a63; --select: #7aa5ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17150f; --board: #5c4824; --board-line: #a7884a; --card: #24211a; --ink: #f0eadc;
+  --muted: #b3a88f; --line: #3d372a; --accent: #ff7a63; --good: #63c98b; --bad: #ff7a63; --select: #7aa5ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 24px; }
+header { display: grid; gap: 8px; }
+.eyebrow { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; margin: 0; text-wrap: balance; }
+h1 .vs { color: var(--accent); font-size: .6em; vertical-align: .18em; margin: 0 .15em; }
+.lede { margin: 0; max-width: 70ch; }
+.ja { color: var(--muted); font-size: .92em; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 0; }
+
+.tray { display: grid; gap: 10px; }
+.tray-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; min-height: 64px; }
+.cards:empty::after { content: "All cards are placed. Check your sort below."; color: var(--muted); font-size: 14px; }
+
+.card {
+  background: var(--card); color: var(--ink); border: 1.5px solid var(--line); border-radius: 6px;
+  padding: 10px 12px; text-align: left; font-family: var(--body); font-size: 14px; line-height: 1.45;
+  cursor: grab; display: grid; gap: 3px; min-width: 0; box-shadow: 0 1px 0 var(--line);
+}
+.card .jp { font-size: 12.5px; color: var(--muted); }
+.card[aria-pressed="true"] { border-color: var(--select); box-shadow: 0 0 0 2px var(--select); }
+.card.dragging { opacity: .45; }
+.card.right { border-color: var(--good); }
+.card.wrong { border-color: var(--bad); }
+.card .why { display: none; font-size: 13px; border-top: 1px dashed var(--line); padding-top: 6px; margin-top: 4px; color: var(--ink); }
+.checked .card .why { display: block; }
+.card .mark { font-weight: 700; font-size: 12.5px; display: none; }
+.checked .card .mark { display: block; }
+.card.right .mark { color: var(--good); } .card.wrong .mark { color: var(--bad); }
+.card .src { color: var(--muted); font-size: 12px; }
+.card.mine { border-style: dashed; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--select); outline-offset: 2px; }
+
+.board {
+  background: var(--board); border-radius: 8px; padding: 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px;
+  background-image:
+    linear-gradient(var(--board-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--board-line) 1px, transparent 1px);
+  background-size: 36px 36px; background-position: 7px 7px;
+}
+@media (max-width: 720px) { .board { grid-template-columns: minmax(0, 1fr); } }
+.bin {
+  background: color-mix(in srgb, var(--bg) 88%, transparent); border-radius: 6px; padding: 12px;
+  display: grid; gap: 10px; align-content: start; min-height: 220px; border: 2px solid transparent; cursor: pointer;
+}
+.bin.over, .bin.target { border-color: var(--select); }
+.bin-head { display: flex; gap: 12px; align-items: center; }
+.stone { width: 34px; height: 34px; border-radius: 50%; flex: none; }
+.stone.white { background: radial-gradient(circle at 35% 30%, #ffffff, #dcd8cf 70%, #b9b3a6); box-shadow: 0 2px 3px rgba(0,0,0,.35); }
+.stone.black { background: radial-gradient(circle at 35% 30%, #6b6b6b, #1a1a1a 60%, #000); box-shadow: 0 2px 3px rgba(0,0,0,.45); }
+.bin-head h3 { margin: 0; font-family: var(--display); font-size: 17px; line-height: 1.3; }
+.bin-head p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.bin .cards { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.bin .cards:empty::after { content: "Tap a card, then tap here. Or drag it."; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { font-family: var(--body); font-size: 14px; border-radius: 5px; padding: 9px 16px; cursor: pointer; border: 1.5px solid var(--ink); background: var(--ink); color: var(--bg); font-weight: 700; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 400; }
+.btn.ghost.confirm { border-color: var(--bad); color: var(--bad); }
+.score { font-family: var(--display); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.status { font-size: 14px; color: var(--muted); margin: 0; min-height: 1.5em; }
+
+.add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.add input { flex: 1 1 260px; min-width: 0; font-family: var(--body); font-size: 14px; padding: 8px 10px; border-radius: 5px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); }
+
+.discuss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 720px) { .discuss { grid-template-columns: minmax(0, 1fr); } }
+.dq { border-top: 2px solid var(--ink); padding-top: 10px; display: grid; gap: 4px; align-content: start; }
+.dq p { margin: 0; }
+blockquote { margin: 0; font-family: var(--display); font-size: clamp(18px, 2.4vw, 22px); line-height: 1.5; max-width: 60ch; }
+blockquote cite { display: block; font-family: var(--body); font-style: normal; font-size: 13px; color: var(--muted); margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Week 4 · Mitchell, Chapter 10 “Beyond Games”</p>
+    <h1>Kindergartner <span class="vs">vs.</span> AlphaGo</h1>
+    <p class="lede">AlphaGo beat a world champion at Go. Mitchell still says “the lowliest kindergartner in the school chess club is smarter than AlphaGo.” Sort each task to find out why.<br>
+    <span class="ja">AlphaGoは囲碁の世界チャンピオンに勝ちました。それでも著者は「幼稚園児のほうがAlphaGoより賢い」と言います。カードを分類して、その理由を考えましょう。</span></p>
+  </header>
+
+  <section class="tray" aria-labelledby="tray-h">
+    <div class="tray-head">
+      <h2 id="tray-h">Task cards <span class="ja" style="font-family:var(--body);font-size:14px">タスクカード</span></h2>
+      <span class="ja" style="font-size:13px">Tap a card, then tap a side of the board. You can also drag. / カードを選んで、盤のどちらかをタップ。</span>
+    </div>
+    <div class="cards" id="tray"></div>
+  </section>
+
+  <section aria-label="Sorting board">
+    <div class="board" id="board">
+      <div class="bin" id="bin-human" data-bin="human" role="button" tabindex="0" aria-label="Easy for people, hard for AI">
+        <div class="bin-head"><span class="stone white" aria-hidden="true"></span>
+          <div><h3>Easy for people, hard for AI</h3><p>人間には簡単、AIには難しい</p></div></div>
+        <div class="cards"></div>
+      </div>
+      <div class="bin" id="bin-ai" data-bin="ai" role="button" tabindex="0" aria-label="Hard for people, easy for AI">
+        <div class="bin-head"><span class="stone black" aria-hidden="true"></span>
+          <div><h3>Hard for people, easy for AI</h3><p>人間には難しい、AIには簡単</p></div></div>
+        <div class="cards"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn" id="check" type="button">Check my sort</button>
+    <span class="score" id="score" aria-live="polite"></span>
+    <button class="btn ghost" id="reset" type="button">Start over</button>
+  </div>
+  <p class="status" id="status" role="status"></p>
+
+  <section style="display:grid;gap:10px" aria-labelledby="add-h">
+    <h2 id="add-h">Add your own task <span class="ja" style="font-family:var(--body);font-size:14px">自分のカードを追加</span></h2>
+    <p class="ja" style="margin:0">Think of an everyday task the book doesn’t mention. Where does it go? These cards aren’t scored; defend your choice in discussion.<br>本に出てこない日常のタスクを考えましょう。どちらに入りますか？（採点なし。理由を話し合いましょう）</p>
+    <form class="add" id="addform">
+      <input id="newtask" type="text" maxlength="90" placeholder="e.g. Recognize a friend wearing a mask" aria-label="Your own task">
+      <button class="btn ghost" type="submit">Add card</button>
+    </form>
+  </section>
+
+  <section style="display:grid;gap:16px" aria-labelledby="disc-h">
+    <h2 id="disc-h">Discuss <span class="ja" style="font-family:var(--body);font-size:14px">話し合い</span></h2>
+    <blockquote>“For humans, a crucial part of intelligence is, rather than being able to learn any particular skill, being able to learn to think and to then apply our thinking flexibly.”
+      <cite>Chapter 10, “How Intelligent Is AlphaGo?”</cite></blockquote>
+    <div class="discuss">
+      <div class="dq"><p>1. Look at the “easy for people” side. What do most of these tasks have in common? Use the words <b>transfer learning</b>.</p>
+        <p class="ja">「人間には簡単」側のカードの共通点は何ですか？「転移学習」という言葉を使って説明しましょう。</p></div>
+      <div class="dq"><p>2. Games have clear rules, clear rewards, and nothing hidden. Which cards break those rules? Why does that make them hard for AI?</p>
+        <p class="ja">ゲームにはルール・報酬が明確で、隠れた情報がありません。どのカードがその条件に当てはまりませんか？</p></div>
+      <div class="dq"><p>3. Which card surprised you most? Why did you first put it on the other side?</p>
+        <p class="ja">一番意外だったカードはどれですか？最初に反対側に置いたのはなぜですか？</p></div>
+      <div class="dq"><p>4. Is AlphaGo intelligent? Is a kindergartner smarter? Take a side and give one reason from the chapter.</p>
+        <p class="ja">AlphaGoは知的だと言えますか？幼稚園児のほうが賢いですか？立場を決めて、本から理由を一つ挙げましょう。</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const CARDS = [
+    { id: 'go', en: 'Beat a world champion at Go', ja: '囲碁で世界チャンピオンに勝つ', ans: 'ai',
+      why: 'AlphaGo defeated Lee Sedol, one of the world’s best players, learning largely through self-play.', src: '“How Intelligent Is AlphaGo?”' },
+    { id: 'mult', en: 'Multiply two 50-digit numbers correctly', ja: '50桁の数どうしを正確に掛け算する', ans: 'ai',
+      why: 'Terrifically hard for people, but a computer does it “in a split second with a one-line program.”', src: '“The Most Challenging of Domains”' },
+    { id: 'atari', en: 'Reach superhuman Atari scores using only the screen pixels', ja: '画面のピクセルだけを見てAtariゲームで超人的なスコアを出す', ans: 'ai',
+      why: 'DeepMind’s Atari players learned from pixels alone. Simple random search did nearly as well on some games, so the domain may be easier than it looks.', src: '“The Most Challenging of Domains”' },
+    { id: 'practice', en: 'Play five million practice games without getting tired or bored', ja: '疲れず飽きずに500万回の練習試合をする', ans: 'ai',
+      why: 'AlphaGo trained by playing itself about five million times. No human can practice like that.', src: 'Chapter 9, end of the AlphaGo section' },
+    { id: 'photo', en: 'Describe what is happening in a photo', ja: '写真に何が写っているか説明する', ans: 'human',
+      why: 'Mitchell’s example of something “quite easy” for people that is “extremely challenging for computers.”', src: '“The Most Challenging of Domains”' },
+    { id: 'charades', en: 'Play charades as well as a six-year-old', ja: '6歳の子どもと同じくらいジェスチャーゲームをする', ans: 'human',
+      why: 'Charades needs visual, language, and social understanding “far beyond the abilities of any current AI system.”', src: '“The Most Challenging of Domains”' },
+    { id: 'door', en: 'Open a kind of doorknob you have never seen before', ja: '見たことのない種類のドアノブを開ける', ans: 'human',
+      why: 'Once a toddler learns one doorknob, the skill generalizes to almost any doorknob. That is transfer learning.', src: '“Generality and Transfer Learning”' },
+    { id: 'checkers', en: 'Use what you learned in checkers to learn chess faster', ja: 'チェッカーで学んだことを使ってチェスを早く覚える', ans: 'human',
+      why: 'People transfer skills between related games. AlphaZero needs a separate network trained from scratch for each game.', src: '“Generality and Transfer Learning”' },
+    { id: 'paddle', en: 'Keep playing Breakout after the paddle moves up a few pixels', ja: 'パドルが数ピクセル上に動いても、Breakoutを続ける', ans: 'human',
+      why: 'The trained AI’s performance “plummets” and needs many rounds of retraining. It never learned the concept of a paddle.', src: '“What Did These Systems Learn?”' },
+    { id: 'board', en: 'Play Go on a smaller board', ja: '小さい碁盤で囲碁を打つ', ans: 'human',
+      why: 'A Go player adjusts right away. AlphaGo would need its network restructured and retrained.', src: '“What Did These Systems Learn?”' },
+    { id: 'think', en: 'Use lessons from chess club to plan and reason in everyday life', ja: 'チェスクラブで学んだ考え方を日常生活の計画や判断に生かす', ans: 'human',
+      why: 'AlphaGo “has not learned to think better about anything except the game of Go.” This is why the kindergartner is smarter.', src: '“How Intelligent Is AlphaGo?”' },
+    { id: 'dishes', en: 'Load a dishwasher while the dog tries to lick the plates', ja: '犬が皿をなめようとする中で食洗機に食器を入れる', ans: 'human',
+      why: 'The real world has no clear “state,” hidden objects, and surprises like the dog. Every assumption that games satisfy is broken.', src: '“From Games to the Real World”' },
+  ];
+
+  const tray = document.getElementById('tray');
+  const bins = { human: document.querySelector('#bin-human .cards'), ai: document.querySelector('#bin-ai .cards') };
+  const binEls = { human: document.getElementById('bin-human'), ai: document.getElementById('bin-ai') };
+  const statusEl = document.getElementById('status');
+  const scoreEl = document.getElementById('score');
+  const board = document.getElementById('board');
+  let selected = null;
+  let customCount = 0;
+
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  function makeCard(c, custom) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'card' + (custom ? ' mine' : ''); b.id = 'card-' + c.id;
+    b.draggable = true; b.dataset.id = c.id; b.setAttribute('aria-pressed', 'false');
+    if (!custom) b.dataset.ans = c.ans;
+    b.innerHTML = '<span>' + esc(c.en) + '</span>' + (c.ja ? '<span class="jp">' + esc(c.ja) + '</span>' : '<span class="jp">Your card · 自分のカード</span>') +
+      (custom ? '' : '<span class="mark"></span><span class="why">' + esc(c.why) + ' <span class="src">' + esc(c.src) + '</span></span>');
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      if (selected === b) { select(null); return; }
+      // a selected card + clicking a placed card: treat as a click on that card's bin
+      select(b);
+    });
+    b.addEventListener('dragstart', e => { b.classList.add('dragging'); e.dataTransfer.setData('text/plain', b.id); e.dataTransfer.effectAllowed = 'move'; });
+    b.addEventListener('dragend', () => b.classList.remove('dragging'));
+    return b;
+  }
+  function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+  function select(card) {
+    if (selected) selected.setAttribute('aria-pressed', 'false');
+    selected = card;
+    Object.values(binEls).forEach(el => el.classList.toggle('target', !!card));
+    if (card) {
+      card.setAttribute('aria-pressed', 'true');
+      const inBin = card.closest('.bin');
+      statusEl.textContent = inBin ? 'Tap the other side to move it, or tap the tray area above to send it back.' : 'Now tap a side of the board.';
+    } else statusEl.textContent = '';
+  }
+
+  function place(card, where) {
+    uncheck();
+    (where === 'tray' ? tray : bins[where]).appendChild(card);
+    select(null);
+  }
+
+  Object.entries(binEls).forEach(([key, el]) => {
+    el.addEventListener('click', () => { if (selected) place(selected, key); });
+    el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && selected && e.target === el) { e.preventDefault(); place(selected, key); } });
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('over'));
+    el.addEventListener('drop', e => {
+      e.preventDefault(); el.classList.remove('over');
+      const c = document.getElementById(e.dataTransfer.getData('text/plain'));
+      if (c) place(c, key);
+    });
+  });
+  const trayWrap = tray.parentElement;
+  trayWrap.addEventListener('click', () => { if (selected && selected.closest('.bin')) place(selected, 'tray'); });
+  trayWrap.addEventListener('dragover', e => e.preventDefault());
+  trayWrap.addEventListener('drop', e => { e.preventDefault(); const c = document.getElementById(e.dataTransfer.getData('text/plain')); if (c) place(c, 'tray'); });
+
+  function uncheck() {
+    board.classList.remove('checked');
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('right', 'wrong'));
+    scoreEl.textContent = '';
+  }
+
+  document.getElementById('check').addEventListener('click', () => {
+    const scored = [...document.querySelectorAll('.card[data-ans]')];
+    const left = scored.filter(c => !c.closest('.bin')).length;
+    if (left) { statusEl.textContent = left + ' card' + (left > 1 ? 's are' : ' is') + ' still in the tray. Place every book card first. / まだ置いていないカードがあります。'; return; }
+    let right = 0;
+    scored.forEach(c => {
+      const bin = c.closest('.bin').dataset.bin;
+      const ok = bin === c.dataset.ans;
+      if (ok) right++;
+      c.classList.toggle('right', ok); c.classList.toggle('wrong', !ok);
+      c.querySelector('.mark').textContent = ok ? '✓ Correct' : '✗ Belongs on the ' + (c.dataset.ans === 'human' ? 'white-stone (people)' : 'black-stone (AI)') + ' side';
+    });
+    board.classList.add('checked');
+    scoreEl.textContent = right + ' / ' + scored.length;
+    statusEl.textContent = right === scored.length
+      ? 'All correct. Now read the reasons on each card and try the discussion questions. / 全問正解！'
+      : 'Read the reason on each card marked ✗, then move it and check again. / ✗のカードの理由を読んで、もう一度挑戦しましょう。';
+    select(null);
+  });
+
+  const resetBtn = document.getElementById('reset');
+  let armed = false, t;
+  resetBtn.addEventListener('click', () => {
+    if (!armed) { armed = true; resetBtn.textContent = 'Click again to start over'; resetBtn.classList.add('confirm');
+      t = setTimeout(() => { armed = false; resetBtn.textContent = 'Start over'; resetBtn.classList.remove('confirm'); }, 3000); return; }
+    clearTimeout(t); armed = false; resetBtn.textContent = 'Start over'; resetBtn.classList.remove('confirm');
+    init(); statusEl.textContent = 'Cards shuffled. / シャッフルしました。';
+  });
+
+  document.getElementById('addform').addEventListener('submit', e => {
+    e.preventDefault();
+    const input = document.getElementById('newtask');
+    const v = input.value.trim();
+    if (!v) { statusEl.textContent = 'Type a task first, then press Add card.'; return; }
+    customCount++;
+    tray.appendChild(makeCard({ id: 'mine-' + customCount, en: v }, true));
+    input.value = '';
+    statusEl.textContent = 'Added to the tray. Now place it on the board.';
+  });
+
+  function init() {
+    tray.innerHTML = ''; bins.human.innerHTML = ''; bins.ai.innerHTML = '';
+    uncheck(); select(null);
+    shuffle(CARDS.slice()).forEach(c => tray.appendChild(makeCard(c)));
+  }
+  init();
+})();
+</script>
+
+</body></html>

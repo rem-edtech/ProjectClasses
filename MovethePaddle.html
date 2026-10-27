@@ -1,0 +1,479 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Move the Paddle</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: arcade cabinet on the left (game + variant switches), lab notebook on the right (score log vs. the book's AI), reflection below. */
+:root {
+  --bg: #eceff7;
+  --panel: #ffffff;
+  --ink: #141a33;
+  --muted: #555d80;
+  --line: #d3d8e8;
+  --accent: #d9432b;      /* Breakout red row */
+  --amber: #c98a00;       /* yellow row, darkened for text */
+  --good: #23824f;
+  --bad: #c0392b;
+  --chip: #e3e7f3;
+  --display: "Silkscreen", "Courier New", monospace;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1122; --panel: #161b30; --ink: #e7eaf6; --muted: #9ba2c2; --line: #2a3152;
+    --accent: #ff6a4d; --amber: #ffc23d; --good: #4fd08a; --bad: #ff7a6b; --chip: #232a47;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1122; --panel: #161b30; --ink: #e7eaf6; --muted: #9ba2c2; --line: #2a3152;
+  --accent: #ff6a4d; --amber: #ffc23d; --good: #4fd08a; --bad: #ff7a6b; --chip: #232a47;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body);
+  font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; }
+.bricks { display: flex; gap: 4px; }
+.bricks i { height: 8px; flex: 1; border-radius: 1px; }
+.bricks i:nth-child(4n+1) { background: #e0482f; }
+.bricks i:nth-child(4n+2) { background: #f08a24; }
+.bricks i:nth-child(4n+3) { background: #2fa85a; }
+.bricks i:nth-child(4n+4) { background: #e8c21c; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 6vw, 52px); line-height: 1.05; margin: 0; text-wrap: balance; }
+.lede { margin: 0; max-width: 68ch; }
+.ja { color: var(--muted); font-size: .92em; }
+.main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
+section > h2 { font-family: var(--display); font-weight: 400; font-size: 18px; margin: 0 0 10px; letter-spacing: .02em; }
+
+/* Cabinet */
+.cabinet { background: #0a0d1c; border-radius: 10px; padding: 14px; display: grid; gap: 12px; }
+.screen { display: flex; justify-content: center; align-items: center; background: #05070f; border-radius: 6px; padding: 10px; min-height: 120px; }
+canvas { display: block; width: 100%; height: auto; touch-action: none; border-radius: 2px; cursor: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; color: #c9cde6; font-size: 13px; }
+.start {
+  font-family: var(--display); font-size: 16px; background: #e0482f; color: #fff; border: 0;
+  padding: 10px 18px; border-radius: 4px; cursor: pointer;
+}
+.start:hover { background: #f05a40; }
+.start:disabled { background: #4a4f6a; cursor: default; }
+button:focus-visible, .variant:focus-visible, textarea:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.how { margin: 0; }
+
+.variants { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .variants { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.variant {
+  text-align: left; background: var(--panel); color: var(--ink); border: 1.5px solid var(--line);
+  border-radius: 6px; padding: 10px 12px; cursor: pointer; font-family: var(--body); display: grid; gap: 2px;
+}
+.variant b { font-size: 14px; }
+.variant span { font-size: 12px; color: var(--muted); }
+.variant[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.variant .done { color: var(--good); font-size: 12px; }
+
+/* Notebook */
+.log { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
+.pct { display: inline-block; font-size: 12px; font-weight: 500; padding: 1px 7px; border-radius: 99px; background: var(--chip); }
+.pct.up { color: var(--good); } .pct.down { color: var(--bad); }
+.tag { display: inline-block; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; margin-bottom: 3px; }
+.tag.book { background: var(--accent); color: #fff; }
+.tag.predict { border: 1px dashed var(--muted); color: var(--muted); }
+.ai { color: var(--ink); }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font-family: var(--body); font-size: 13.5px; background: var(--chip); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.confirm { border-color: var(--bad); color: var(--bad); }
+.status { font-size: 13px; color: var(--good); min-height: 1.4em; margin: 0; }
+
+/* Reflection */
+.reflect { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .reflect { grid-template-columns: minmax(0, 1fr); } }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.q p { margin: 0; }
+.q .n { font-family: var(--display); color: var(--accent); font-size: 14px; }
+blockquote { margin: 0; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; max-width: 72ch; }
+blockquote p { margin: 0; }
+blockquote cite { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+textarea { position: absolute; left: -9999px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="bricks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="eyebrow">Week 4 · Mitchell, Chapter 10 “Beyond Games”</p>
+    <h1>Move the Paddle</h1>
+    <p class="lede">A trained AI scored “superhuman” at Breakout. Then researchers moved the paddle up a few pixels, and its score fell apart. Play each version below and see how fast <em>you</em> adapt.<br>
+    <span class="ja">AIはBreakoutで「超人的」なスコアを出しました。でも、パドルを数ピクセル上に動かしただけでスコアが急落しました。あなたはどうでしょう？</span></p>
+  </header>
+
+  <div class="main">
+    <section aria-labelledby="play-h">
+      <h2 id="play-h">1 · Play</h2>
+      <div class="cabinet">
+        <div class="screen" id="screen">
+          <canvas id="game" width="480" height="360" aria-label="Breakout game. Move the paddle with the mouse, touch, or arrow keys."></canvas>
+        </div>
+        <div class="controls">
+          <p class="how">Mouse, finger, or ← → keys · 30-second rounds<br><span lang="ja">マウス・指・矢印キーで操作 · 1ラウンド30秒</span></p>
+          <button class="start" id="start" type="button">Start round</button>
+        </div>
+      </div>
+      <div style="height:12px"></div>
+      <div class="variants" id="variants" role="group" aria-label="Game version"></div>
+      <p class="note" style="margin-top:10px">Play <b>Normal</b> first so the log can compare your other scores to it. 最初に「通常」を遊びましょう。</p>
+    </section>
+
+    <section aria-labelledby="log-h">
+      <h2 id="log-h">2 · Compare</h2>
+      <div class="log">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Version</th><th>Your best</th><th>Trained AI</th></tr></thead>
+            <tbody id="logbody"></tbody>
+          </table>
+        </div>
+        <p class="note"><span class="tag book">Book</span> results reported in Chapter 10. <span class="tag predict">Predict</span> versions the book doesn't report. Write your own prediction for the AI.</p>
+        <div class="row-actions">
+          <button class="btn" id="copy" type="button">Copy my results</button>
+          <button class="btn" id="clear" type="button">Clear log</button>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </div>
+    </section>
+  </div>
+
+  <section aria-labelledby="think-h">
+    <h2 id="think-h">3 · Think</h2>
+    <blockquote>
+      <p>“The system has learned no such thing; it doesn’t really understand what a tunnel, or what a wall is; it has just learned specific contingencies for particular scenarios.”</p>
+      <cite>Gary Marcus, quoted in Chapter 10, “What Did These Systems Learn?”</cite>
+    </blockquote>
+    <div style="height:16px"></div>
+    <div class="reflect">
+      <div class="q"><span class="n">Q1</span>
+        <p>Which change was hardest for you? How many rounds did it take to get back to your Normal score?</p>
+        <p class="ja">どの変化が一番やりにくかったですか？「通常」のスコアに戻るまで何ラウンドかかりましたか？</p></div>
+      <div class="q"><span class="n">Q2</span>
+        <p>The trained AI needed many rounds of retraining after tiny changes. What did you already know about paddles and balls that the AI did not?</p>
+        <p class="ja">AIは小さな変化でも何度も再学習が必要でした。パドルやボールについて、あなたは知っていてAIは知らなかったことは何ですか？</p></div>
+      <div class="q"><span class="n">Q3</span>
+        <p>Mitchell writes that “another term for transfer learning is, well, learning.” Do you agree? Use your scores as evidence.</p>
+        <p class="ja">著者は「転移学習の別名は、まさに『学習』だ」と書いています。賛成ですか？あなたのスコアを根拠に説明しましょう。</p></div>
+    </div>
+  </section>
+</div>
+<textarea id="copybuf" aria-hidden="true" tabindex="-1"></textarea>
+
+<script>
+(function () {
+  const VARIANTS = [
+    { id: 'normal', name: 'Normal', ja: '通常', hint: 'The game the AI trained on',
+      ai: { tag: 'book', text: 'Superhuman score after training on millions of game frames.' } },
+    { id: 'paddle', name: 'Paddle moved up', ja: 'パドルを上へ', hint: 'Paddle sits higher on the screen',
+      ai: { tag: 'book', text: 'Performance plummets. Needs many episodes of retraining. (Researchers moved it only a few pixels.)' } },
+    { id: 'color', name: 'New background', ja: '背景色を変更', hint: 'Same game, different color',
+      ai: { tag: 'book', text: 'A trained Pong player’s score dropped significantly when only the background color changed.' } },
+    { id: 'small', name: 'Smaller board', ja: '盤面を小さく', hint: 'Narrower screen, fewer bricks',
+      ai: { tag: 'book', text: 'Mitchell says AlphaGo couldn’t even play on a smaller Go board without being rebuilt and retrained.' } },
+    { id: 'flip', name: 'Flipped controls', ja: '操作を左右反転', hint: 'Left moves right',
+      ai: { tag: 'predict', text: 'Not tested in the book. What do you predict?' } },
+    { id: 'fast', name: 'Faster ball', ja: 'ボールを速く', hint: 'Ball moves 1.5× faster',
+      ai: { tag: 'predict', text: 'Not tested in the book. What do you predict?' } },
+  ];
+  const byId = Object.fromEntries(VARIANTS.map(v => [v.id, v]));
+  const ROUND = 30;
+  const ROW_COLORS = ['#e0482f', '#f08a24', '#2fa85a', '#e8c21c'];
+
+  let results = {};
+  try { results = JSON.parse(localStorage.getItem('mtp-results') || '{}') || {}; } catch (e) { results = {}; }
+  const save = () => { try { localStorage.setItem('mtp-results', JSON.stringify(results)); } catch (e) {} };
+  const best = id => (results[id] && results[id].length) ? Math.max(...results[id]) : null;
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const startBtn = document.getElementById('start');
+  let current = 'normal';
+  let W = 480, H = 360;
+  let s; // game state
+
+  function config(id) {
+    return {
+      W: id === 'small' ? 340 : 480,
+      H: id === 'small' ? 300 : 360,
+      bg: id === 'color' ? '#1f7a72' : '#0b1026',
+      paddleLift: id === 'paddle' ? 64 : 0,
+      flip: id === 'flip',
+      speed: id === 'fast' ? 390 : 260,
+    };
+  }
+
+  function makeBricks() {
+    const cols = Math.max(6, Math.floor(W / 48));
+    const margin = 12, gap = 4, top = 40, bh = 13;
+    const bw = (W - margin * 2 - gap * (cols - 1)) / cols;
+    const out = [];
+    for (let r = 0; r < 4; r++) for (let c = 0; c < cols; c++) {
+      out.push({ x: margin + c * (bw + gap), y: top + r * (bh + gap), w: bw, h: bh, color: ROW_COLORS[r], alive: true });
+    }
+    return out;
+  }
+
+  function reset(id) {
+    const c = config(id);
+    W = c.W; H = c.H;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = (W / 480 * 100) + '%';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    s = {
+      c, running: false, over: false, time: ROUND, score: 0, misses: 0,
+      paddle: { w: 72, h: 10, x: W / 2 - 36, y: H - 24 - c.paddleLift },
+      ball: null, wait: 0, bricks: makeBricks(), keys: { l: false, r: false },
+    };
+    serve();
+    draw();
+  }
+
+  function serve() {
+    const p = s.paddle;
+    const ang = (Math.random() * 0.8 - 0.4);
+    s.ball = { x: p.x + p.w / 2, y: p.y - 40, r: 5, vx: Math.sin(ang) * s.c.speed, vy: -Math.cos(ang) * s.c.speed };
+    s.ball.vy = Math.abs(s.ball.vy); // start moving down toward the paddle
+    s.wait = 0.7;
+  }
+
+  function step(dt) {
+    if (!s.running) return;
+    s.time -= dt;
+    if (s.time <= 0) { s.time = 0; endRound(); return; }
+    // keyboard
+    const dir = (s.keys.r ? 1 : 0) - (s.keys.l ? 1 : 0);
+    if (dir) movePaddleBy((s.c.flip ? -dir : dir) * 440 * dt);
+    if (s.wait > 0) { s.wait -= dt; return; }
+    const sub = Math.ceil(dt / (1 / 240));
+    const h = dt / sub;
+    for (let i = 0; i < sub; i++) if (physics(h)) break;
+  }
+
+  function physics(h) {
+    const b = s.ball, p = s.paddle;
+    const px = b.x, py = b.y;
+    b.x += b.vx * h; b.y += b.vy * h;
+    if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
+    if (b.x + b.r > W) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
+    if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+    // paddle
+    if (b.vy > 0 && b.y + b.r >= p.y && py + b.r <= p.y + 2 && b.x >= p.x - b.r && b.x <= p.x + p.w + b.r) {
+      const off = Math.max(-1, Math.min(1, (b.x - (p.x + p.w / 2)) / (p.w / 2)));
+      const a = off * 1.05;
+      b.vx = Math.sin(a) * s.c.speed; b.vy = -Math.cos(a) * s.c.speed;
+      b.y = p.y - b.r;
+    }
+    // missed
+    if (b.y - b.r > H) { s.misses++; serve(); return true; }
+    // bricks
+    for (const k of s.bricks) {
+      if (!k.alive) continue;
+      const cx = Math.max(k.x, Math.min(b.x, k.x + k.w));
+      const cy = Math.max(k.y, Math.min(b.y, k.y + k.h));
+      if ((b.x - cx) ** 2 + (b.y - cy) ** 2 <= b.r * b.r) {
+        k.alive = false; s.score++;
+        const fromSide = px + b.r <= k.x || px - b.r >= k.x + k.w;
+        if (fromSide) b.vx = -b.vx; else b.vy = -b.vy;
+        if (s.bricks.every(x => !x.alive)) s.bricks = makeBricks();
+        break;
+      }
+    }
+    return false;
+  }
+
+  function movePaddleTo(x) {
+    const p = s.paddle;
+    p.x = Math.max(0, Math.min(W - p.w, x - p.w / 2));
+  }
+  function movePaddleBy(dx) { movePaddleTo(s.paddle.x + s.paddle.w / 2 + dx); }
+
+  function draw() {
+    ctx.fillStyle = s.c.bg; ctx.fillRect(0, 0, W, H);
+    for (const k of s.bricks) if (k.alive) { ctx.fillStyle = k.color; ctx.fillRect(k.x, k.y, k.w, k.h); }
+    const p = s.paddle;
+    ctx.fillStyle = '#dfe6ff'; ctx.fillRect(p.x, p.y, p.w, p.h);
+    if (!s.over) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(s.ball.x, s.ball.y, s.ball.r, 0, Math.PI * 2); ctx.fill(); }
+    // HUD
+    ctx.font = '13px Silkscreen, "Courier New", monospace';
+    ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'top';
+    ctx.textAlign = 'left'; ctx.fillText('BRICKS ' + s.score, 12, 12);
+    ctx.textAlign = 'center'; ctx.fillText(Math.ceil(s.time) + 's', W / 2, 12);
+    ctx.textAlign = 'right'; ctx.fillText('MISSES ' + s.misses, W - 12, 12);
+    if (!s.running) {
+      ctx.fillStyle = 'rgba(5,7,15,.72)'; ctx.fillRect(0, H / 2 - 44, W, 88);
+      ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '18px Silkscreen, "Courier New", monospace';
+      const v = byId[current];
+      if (s.over) {
+        ctx.fillText('ROUND OVER: ' + s.score + ' BRICKS', W / 2, H / 2 - 12);
+        ctx.font = '12px Silkscreen, "Courier New", monospace';
+        ctx.fillText('PRESS START TO PLAY AGAIN', W / 2, H / 2 + 16);
+      } else {
+        ctx.fillText(v.name.toUpperCase(), W / 2, H / 2 - 12);
+        ctx.font = '12px Silkscreen, "Courier New", monospace';
+        ctx.fillText('PRESS START (OR SPACE)', W / 2, H / 2 + 16);
+      }
+    }
+  }
+
+  function endRound() {
+    s.running = false; s.over = true;
+    (results[current] = results[current] || []).push(s.score);
+    save();
+    startBtn.disabled = false; startBtn.textContent = 'Play again';
+    renderLog(); renderVariants();
+    const v = byId[current], nb = best('normal');
+    let msg = v.name + ': ' + s.score + ' bricks.';
+    if (current !== 'normal' && nb) msg += ' That is ' + Math.round(s.score / nb * 100) + '% of your best Normal score.';
+    setStatus(msg);
+  }
+
+  function start() {
+    if (s.running) return;
+    reset(current);
+    s.running = true;
+    startBtn.disabled = true; startBtn.textContent = 'Playing…';
+    canvas.focus({ preventScroll: true });
+  }
+
+  let last = performance.now();
+  function loop(t) {
+    const dt = Math.min(0.05, (t - last) / 1000); last = t;
+    step(dt); draw();
+    requestAnimationFrame(loop);
+  }
+
+  // input
+  canvas.tabIndex = 0;
+  canvas.addEventListener('pointermove', e => {
+    if (!s) return;
+    const r = canvas.getBoundingClientRect();
+    let x = (e.clientX - r.left) / r.width * W;
+    if (s.c.flip) x = W - x;
+    movePaddleTo(x);
+  });
+  canvas.addEventListener('pointerdown', e => { canvas.dispatchEvent(new PointerEvent('pointermove', e)); });
+  window.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button') && e.key === ' ') return;
+    if (e.key === 'ArrowLeft' || e.key === 'a') { s.keys.l = true; if (s.running) e.preventDefault(); }
+    if (e.key === 'ArrowRight' || e.key === 'd') { s.keys.r = true; if (s.running) e.preventDefault(); }
+    if (e.key === ' ' && document.activeElement === canvas) { e.preventDefault(); start(); }
+  });
+  window.addEventListener('keyup', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') s.keys.l = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') s.keys.r = false;
+  });
+  startBtn.addEventListener('click', start);
+
+  // variants
+  const vbox = document.getElementById('variants');
+  function renderVariants() {
+    vbox.innerHTML = '';
+    for (const v of VARIANTS) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'variant'; b.id = 'v-' + v.id;
+      b.setAttribute('aria-pressed', String(v.id === current));
+      const played = best(v.id) !== null;
+      b.innerHTML = '<b>' + v.name + '</b><span>' + v.ja + ' · ' + v.hint + '</span>' + (played ? '<span class="done">Best: ' + best(v.id) + '</span>' : '');
+      b.addEventListener('click', () => {
+        if (s && s.running) return;
+        current = v.id; reset(current); renderVariants();
+        startBtn.textContent = 'Start round'; setStatus('');
+      });
+      vbox.appendChild(b);
+    }
+  }
+
+  // log
+  const body = document.getElementById('logbody');
+  function renderLog() {
+    const nb = best('normal');
+    body.innerHTML = '';
+    for (const v of VARIANTS) {
+      const bv = best(v.id);
+      let cell = '<span style="color:var(--muted);font-weight:400">not played</span>';
+      if (bv !== null) {
+        cell = bv;
+        if (v.id !== 'normal' && nb) {
+          const pct = Math.round(bv / nb * 100);
+          cell += ' <span class="pct ' + (pct >= 80 ? 'up' : 'down') + '">' + pct + '%</span>';
+        }
+        const n = results[v.id].length;
+        cell += '<div style="font-weight:400;font-size:12px;color:var(--muted)">' + n + ' round' + (n > 1 ? 's' : '') + '</div>';
+      }
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><b>' + v.name + '</b><div class="ja" style="font-size:12px">' + v.ja + '</div></td>' +
+        '<td class="num">' + cell + '</td>' +
+        '<td><span class="tag ' + v.ai.tag + '">' + (v.ai.tag === 'book' ? 'Book' : 'Predict') + '</span><div class="ai">' + v.ai.text + '</div></td>';
+      body.appendChild(tr);
+    }
+  }
+
+  const statusEl = document.getElementById('status');
+  function setStatus(t) { statusEl.textContent = t; }
+
+  document.getElementById('copy').addEventListener('click', () => {
+    const nb = best('normal');
+    const lines = ['Move the Paddle: my results (Week 4, Chapter 10)'];
+    for (const v of VARIANTS) {
+      const bv = best(v.id);
+      if (bv === null) { lines.push('- ' + v.name + ': not played'); continue; }
+      let l = '- ' + v.name + ': best ' + bv + ' bricks (' + results[v.id].length + ' rounds)';
+      if (v.id !== 'normal' && nb) l += ', ' + Math.round(bv / nb * 100) + '% of Normal';
+      lines.push(l);
+    }
+    const text = lines.join('\n');
+    const fallback = () => {
+      const ta = document.getElementById('copybuf'); ta.value = text; ta.select();
+      try { document.execCommand('copy'); setStatus('Copied. Paste it into your reading log.'); }
+      catch (e) { setStatus('Copy is blocked here. Select and copy the table instead.'); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => setStatus('Copied. Paste it into your reading log.'), fallback);
+    } else fallback();
+  });
+
+  const clearBtn = document.getElementById('clear');
+  let armed = false, armTimer;
+  clearBtn.addEventListener('click', () => {
+    if (!armed) {
+      armed = true; clearBtn.textContent = 'Click again to clear'; clearBtn.classList.add('confirm');
+      armTimer = setTimeout(() => { armed = false; clearBtn.textContent = 'Clear log'; clearBtn.classList.remove('confirm'); }, 3000);
+      return;
+    }
+    clearTimeout(armTimer); armed = false; clearBtn.textContent = 'Clear log'; clearBtn.classList.remove('confirm');
+    results = {}; save(); renderLog(); renderVariants(); setStatus('Log cleared.');
+  });
+
+  reset(current);
+  renderVariants(); renderLog();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body></html>
